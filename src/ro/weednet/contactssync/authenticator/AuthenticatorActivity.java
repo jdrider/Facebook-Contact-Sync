@@ -22,10 +22,6 @@
  */
 package ro.weednet.contactssync.authenticator;
 
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.net.MalformedURLException;
-
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -34,13 +30,13 @@ import ro.weednet.contactssync.Constants;
 import ro.weednet.contactssync.R;
 import ro.weednet.contactssync.activities.Preferences;
 
-import com.facebook.android.AsyncFacebookRunner;
-import com.facebook.android.AsyncFacebookRunner.RequestListener;
-import com.facebook.android.DialogError;
-import com.facebook.android.Facebook;
-import com.facebook.android.Util;
-import com.facebook.android.Facebook.DialogListener;
+import com.facebook.Request;
+import com.facebook.RequestAsyncTask;
+import com.facebook.Response;
+import com.facebook.Session;
+import com.facebook.SessionState;
 import com.facebook.android.FacebookError;
+import com.facebook.model.GraphUser;
 
 import android.accounts.Account;
 import android.accounts.AccountAuthenticatorActivity;
@@ -60,25 +56,25 @@ import android.util.Log;
  * Activity which displays login screen to the user.
  */
 public class AuthenticatorActivity extends AccountAuthenticatorActivity {
-	Facebook mFacebook;
 	private AccountManager mAccountManager;
 	public static final String PARAM_USERNAME = "fb_email";
 	public static final String PARAM_AUTHTOKEN_TYPE = "authtokenType";
 	protected boolean mRequestNewAccount = false;
 	private String mFbEmail;
-	private AsyncFacebookRunner mAsyncRunner;
 	public final Handler mHandler = new Handler();
 	protected ProgressDialog mLoading;
 	protected AlertDialog mDialog;
-	
+
+	private Session.StatusCallback mStatusCallback = new SessionStatusCallback();
+
 	@Override
 	public void onCreate(Bundle icicle) {
 		super.onCreate(icicle);
-		
+
 		mLoading = new ProgressDialog(this);
 		mLoading.setTitle(getText(R.string.app_name));
 		mLoading.setMessage("Loading ... ");
-	//	mLoading.setCancelable(false);
+		// mLoading.setCancelable(false);
 		mLoading.setOnCancelListener(new OnCancelListener() {
 			@Override
 			public void onCancel(DialogInterface dialog) {
@@ -89,50 +85,46 @@ public class AuthenticatorActivity extends AccountAuthenticatorActivity {
 				});
 			}
 		});
-		mFacebook = new Facebook(getString(R.string.facebook_app_id));
+
+		Session session = Session.getActiveSession();
+
+		if (session == null) {
+			if (icicle != null) {
+
+			}
+			if (session == null) {
+				session = new Session(this);
+			}
+
+			Session.setActiveSession(session);
+
+			if (Session.getActiveSession().equals(
+					SessionState.CREATED_TOKEN_LOADED)) {
+				session.openForRead(new Session.OpenRequest(this)
+						.setCallback(mStatusCallback));
+			}
+		}
+
 		mAccountManager = AccountManager.get(this);
-		mAsyncRunner = new AsyncFacebookRunner(mFacebook);
-		
+
 		final Intent intent = getIntent();
 		mFbEmail = intent.getStringExtra(PARAM_USERNAME);
 		mRequestNewAccount = mFbEmail == null;
-		
-		mFacebook.authorize(this, Authenticator.REQUIRED_PERMISSIONS, new DialogListener() {
-			@Override
-			public void onComplete(Bundle values) {
-				mHandler.post(new Runnable() {
-					public void run() {
-						mLoading.show();
-					}
-				});
-				
-				mAsyncRunner.request("me", new getUserInfo());
-			}
-			
-			@Override
-			public void onFacebookError(FacebookError error) {
-				Log.v("facebook", "onFacebookError");
-				mHandler.post(new DisplayException(error.getMessage()));
-			}
-			
-			@Override
-			public void onError(DialogError e) {
-				Log.v("facebook", "onError");
-				mHandler.post(new DisplayException(e.getMessage()));
-			}
-			
-			@Override
-			public void onCancel() {
-				Log.v("facebook", "onCancel");
-				mHandler.post(new Runnable() {
-					public void run() {
-						AuthenticatorActivity.this.finish();
-					}
-				});
-			}
-		});
 	}
-	
+
+	@Override
+	public void onStart() {
+		super.onStart();
+
+		Session activeSession = Session.getActiveSession();
+		
+		activeSession.addCallback(mStatusCallback);
+		
+		if(!activeSession.isOpened() && !activeSession.isClosed()){
+			Session.openActiveSession(this, true, mStatusCallback);
+		}	
+	}
+
 	@Override
 	public void onPause() {
 		super.onPause();
@@ -140,80 +132,76 @@ public class AuthenticatorActivity extends AccountAuthenticatorActivity {
 			try {
 				mLoading.dismiss();
 			} catch (Exception e) {
-				
+
 			}
 		}
 	}
 	
 	@Override
+	public void onStop(){
+		super.onStop();
+		
+		Session.getActiveSession().removeCallback(mStatusCallback);
+	}
+
+	@Override
 	public void onActivityResult(int requestCode, int resultCode, Intent data) {
 		super.onActivityResult(requestCode, resultCode, data);
-		
-		mFacebook.authorizeCallback(requestCode, resultCode, data);
+
+		Session.getActiveSession().onActivityResult(this, requestCode,
+				resultCode, data);
 	}
-	
-	public class getUserInfo implements RequestListener {
+
+	public class getUserInfo implements Request.GraphUserCallback {
+
 		@Override
-		public void onMalformedURLException(MalformedURLException e, Object state) {
-			mHandler.post(new DisplayException(e.getMessage()));
-		}
-		
-		@Override
-		public void onIOException(IOException e, Object state) {
-			mHandler.post(new DisplayException(e.getMessage()));
-		}
-		
-		@Override
-		public void onFileNotFoundException(FileNotFoundException e, Object state) {
-			mHandler.post(new DisplayException(e.getMessage()));
-		}
-		
-		@Override
-		public void onFacebookError(FacebookError e, Object state) {
-			mHandler.post(new DisplayException(e.getMessage()));
-		}
-		
-		@Override
-		public void onComplete(String response, Object state) {
+		public void onCompleted(GraphUser user, Response response) {
 			try {
-				JSONObject json = Util.parseJson(response);
-				
+				JSONObject json = response.getGraphObject().getInnerJSONObject();
+
 				ContactsSync app = ContactsSync.getInstance();
 				app.setConnectionTimeout(Preferences.DEFAULT_CONNECTION_TIMEOUT);
 				app.savePreferences();
 				final String email = json.getString("email");
-				final String access_token = mFacebook.getAccessToken();
+				final String access_token = Session.getActiveSession().getAccessToken(); //mFacebook.getAccessToken();
 				final int sync_freq = app.getSyncFrequency() * 3600;
-				
-				final Account account = new Account(email, Constants.ACCOUNT_TYPE);
+
+				final Account account = new Account(email,
+						Constants.ACCOUNT_TYPE);
 				if (mRequestNewAccount) {
-					mAccountManager.addAccountExplicitly(account, access_token, null);
+					mAccountManager.addAccountExplicitly(account, access_token,
+							null);
 				} else {
 					mAccountManager.setPassword(account, access_token);
 				}
-				
+
 				if (sync_freq > 0) {
-					ContentResolver.setSyncAutomatically(account, ContactsContract.AUTHORITY, true);
-					
+					ContentResolver.setSyncAutomatically(account,
+							ContactsContract.AUTHORITY, true);
+
 					Bundle extras = new Bundle();
-					ContentResolver.addPeriodicSync(account, ContactsContract.AUTHORITY, extras, sync_freq);
+					ContentResolver.addPeriodicSync(account,
+							ContactsContract.AUTHORITY, extras, sync_freq);
 				} else {
-					ContentResolver.setSyncAutomatically(account, ContactsContract.AUTHORITY, false);
+					ContentResolver.setSyncAutomatically(account,
+							ContactsContract.AUTHORITY, false);
 				}
-				
+
 				mHandler.post(new Runnable() {
 					public void run() {
 						if (mLoading != null) {
 							try {
 								mLoading.dismiss();
 							} catch (Exception e) {
-								
+
 							}
 						}
 						final Intent intent = new Intent();
 						intent.putExtra(AccountManager.KEY_ACCOUNT_NAME, email);
-						intent.putExtra(AccountManager.KEY_ACCOUNT_TYPE, Constants.ACCOUNT_TYPE);
-						intent.putExtra(AccountManager.KEY_AUTHTOKEN, access_token);
+						intent.putExtra(AccountManager.KEY_ACCOUNT_TYPE,
+								Constants.ACCOUNT_TYPE);
+						intent.putExtra(AccountManager.KEY_AUTHTOKEN,
+								access_token);
 						setAccountAuthenticatorResult(intent.getExtras());
 						setResult(RESULT_OK, intent);
 						finish();
@@ -226,16 +214,17 @@ public class AuthenticatorActivity extends AccountAuthenticatorActivity {
 			}
 		}
 	}
-	
+
 	protected class DisplayException implements Runnable {
 		String mMessage;
-		
+
 		public DisplayException(String msg) {
 			mMessage = msg;
 		}
-		
+
 		public void run() {
-			AlertDialog.Builder builder = new AlertDialog.Builder(AuthenticatorActivity.this);
+			AlertDialog.Builder builder = new AlertDialog.Builder(
+					AuthenticatorActivity.this);
 			builder.setTitle("Facebook Error");
 			builder.setMessage(mMessage);
 			builder.setOnCancelListener(new OnCancelListener() {
@@ -250,8 +239,45 @@ public class AuthenticatorActivity extends AccountAuthenticatorActivity {
 				mDialog = builder.create();
 				mDialog.show();
 			} catch (Exception e) {
-				
+
 			}
 		}
+	}
+
+	private class SessionStatusCallback implements Session.StatusCallback {
+
+		@Override
+		public void call(Session session, SessionState state,
+				Exception exception) {
+			switch (state) {
+			case CREATED:
+				Log.v("facebook", "SessionState CREATED");
+				Session.openActiveSession(AuthenticatorActivity.this, true,
+						mStatusCallback);
+				break;
+			case CREATED_TOKEN_LOADED:
+				Log.v("facebook", "SessionState CREATED_TOKEN_LOADED");
+				break;
+			case OPENED:
+				Log.v("facebook", "SessionState OPENED");
+				mHandler.post(new Runnable() {
+					public void run() {
+						mLoading.show();
+					}
+				});
+
+				RequestAsyncTask asyncMeTask = Request.executeMeRequestAsync(session,
+						new getUserInfo());
+
+				asyncMeTask.execute(new Void[0]);
+
+				break;
+			default:
+				Log.v("facebook", state.toString());
+				AuthenticatorActivity.this.finish();
+			}
+
+		}
+
 	}
 }
