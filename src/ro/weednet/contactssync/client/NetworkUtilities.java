@@ -31,6 +31,7 @@ import org.json.JSONObject;
 import ro.weednet.ContactsSync;
 import ro.weednet.contactssync.authenticator.Authenticator;
 
+import com.facebook.FacebookException;
 import com.facebook.android.Facebook;
 import com.facebook.android.FacebookError;
 import com.facebook.android.Util;
@@ -76,6 +77,8 @@ final public class NetworkUtilities {
 	public boolean checkAccessToken() throws NetworkErrorException {
 	//	throw new NetworkErrorException("custom");
 		
+		boolean checkResult = false;
+		
 		try {
 			Bundle params = new Bundle();
 			params.putInt("timeout", ContactsSync.getInstance().getConnectionTimeout() * 1000);
@@ -90,15 +93,16 @@ final public class NetworkUtilities {
 					if (permissions.isNull(Authenticator.REQUIRED_PERMISSIONS[i])
 					 || permissions.getInt(Authenticator.REQUIRED_PERMISSIONS[i]) == 0) {
 						Log.v("checkToken", "failed because of permissions");
-						return false;
+						//return false;
 					}
 				}
-				return true;
-			} catch (FacebookError e) {
-				Log.v("checkToken", "facebook error, code: " + e.getErrorCode() + ", message: " + e.getMessage());
-				if (!e.getErrorType().equals("OAuthException")) {
+				//return true;
+				checkResult = true;
+			} catch (FacebookException e) {
+				Log.v("checkToken", "facebook error, message: " + e.getMessage());
+				//if (!e.getErrorType().equals("OAuthException")) {
 					throw new NetworkErrorException(e.getMessage());
-				}
+				//}
 			} catch (JSONException e) {
 				Log.v("checkToken", "json error: " + e.getMessage());
 				throw new NetworkErrorException(e.getMessage());
@@ -110,7 +114,7 @@ final public class NetworkUtilities {
 		
 		Log.v("checkToken", "failed. returning false.");
 		
-		return false;
+		return checkResult;
 	}
 	
 	public List<RawContact> getContacts(Account account)

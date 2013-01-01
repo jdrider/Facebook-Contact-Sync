@@ -30,12 +30,12 @@ import ro.weednet.contactssync.Constants;
 import ro.weednet.contactssync.R;
 import ro.weednet.contactssync.activities.Preferences;
 
+import com.facebook.FacebookException;
 import com.facebook.Request;
 import com.facebook.RequestAsyncTask;
 import com.facebook.Response;
 import com.facebook.Session;
 import com.facebook.SessionState;
-import com.facebook.android.FacebookError;
 import com.facebook.model.GraphUser;
 
 import android.accounts.Account;
@@ -209,7 +209,7 @@ public class AuthenticatorActivity extends AccountAuthenticatorActivity {
 				});
 			} catch (JSONException e) {
 				Log.w("Facebook", "JSON Error in response");
-			} catch (FacebookError e) {
+			} catch (FacebookException e) {
 				Log.w("Facebook", "Facebook Error: " + e.getMessage());
 			}
 		}
