@@ -22,9 +22,6 @@
  */
 package ro.weednet.contactssync.authenticator;
 
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import ro.weednet.ContactsSync;
 import ro.weednet.contactssync.Constants;
 import ro.weednet.contactssync.R;
@@ -32,7 +29,6 @@ import ro.weednet.contactssync.activities.Preferences;
 
 import com.facebook.FacebookException;
 import com.facebook.Request;
-import com.facebook.RequestAsyncTask;
 import com.facebook.Response;
 import com.facebook.Session;
 import com.facebook.SessionState;
@@ -66,6 +62,8 @@ public class AuthenticatorActivity extends AccountAuthenticatorActivity {
 	protected AlertDialog mDialog;
 
 	private Session.StatusCallback mStatusCallback = new SessionStatusCallback();
+
+	private boolean isResumed;
 
 	@Override
 	public void onCreate(Bundle icicle) {
@@ -117,12 +115,12 @@ public class AuthenticatorActivity extends AccountAuthenticatorActivity {
 		super.onStart();
 
 		Session activeSession = Session.getActiveSession();
-		
+
 		activeSession.addCallback(mStatusCallback);
-		
-		if(!activeSession.isOpened() && !activeSession.isClosed()){
+
+		if (!activeSession.isOpened() && !activeSession.isClosed()) {
 			Session.openActiveSession(this, true, mStatusCallback);
-		}	
+		}
 	}
 
 	@Override
@@ -135,12 +133,21 @@ public class AuthenticatorActivity extends AccountAuthenticatorActivity {
 
 			}
 		}
+
+		isResumed = false;
 	}
-	
+
 	@Override
-	public void onStop(){
+	public void onResume() {
+		super.onResume();
+
+		isResumed = true;
+	}
+
+	@Override
+	public void onStop() {
 		super.onStop();
-		
+
 		Session.getActiveSession().removeCallback(mStatusCallback);
 	}
 
@@ -157,13 +164,15 @@ public class AuthenticatorActivity extends AccountAuthenticatorActivity {
 		@Override
 		public void onCompleted(GraphUser user, Response response) {
 			try {
-				JSONObject json = response.getGraphObject().getInnerJSONObject();
+				// JSONObject json = response.getGraphObject()
+				// .getInnerJSONObject();
 
 				ContactsSync app = ContactsSync.getInstance();
 				app.setConnectionTimeout(Preferences.DEFAULT_CONNECTION_TIMEOUT);
 				app.savePreferences();
-				final String email = json.getString("email");
-				final String access_token = Session.getActiveSession().getAccessToken(); //mFacebook.getAccessToken();
+				final String email = user.getUsername(); // json.getString("username");
+				final String access_token = Session.getActiveSession()
+						.getAccessToken(); // mFacebook.getAccessToken();
 				final int sync_freq = app.getSyncFrequency() * 3600;
 
 				final Account account = new Account(email,
@@ -207,9 +216,10 @@ public class AuthenticatorActivity extends AccountAuthenticatorActivity {
 						finish();
 					}
 				});
-			} catch (JSONException e) {
-				Log.w("Facebook", "JSON Error in response");
-			} catch (FacebookException e) {
+			} // catch (JSONException e) {
+				// Log.w("Facebook", "JSON Error in response");
+			// }
+			catch (FacebookException e) {
 				Log.w("Facebook", "Facebook Error: " + e.getMessage());
 			}
 		}
@@ -266,15 +276,18 @@ public class AuthenticatorActivity extends AccountAuthenticatorActivity {
 					}
 				});
 
-				RequestAsyncTask asyncMeTask = Request.executeMeRequestAsync(session,
-						new getUserInfo());
+				Request.executeMeRequestAsync(session, new getUserInfo());
 
-				asyncMeTask.execute(new Void[0]);
-
+				break;
+			case CLOSED_LOGIN_FAILED:
+				if (isResumed) {
+					Log.w("facebook", "FB Login Failed");
+					finish();
+				}
 				break;
 			default:
 				Log.v("facebook", state.toString());
-				AuthenticatorActivity.this.finish();
+				// AuthenticatorActivity.this.finish();
 			}
 
 		}
