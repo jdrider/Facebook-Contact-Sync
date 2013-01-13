@@ -100,7 +100,7 @@ public class Authenticator extends AbstractAccountAuthenticator {
 		final String authToken = am.getPassword(account);
 		Log.v(TAG, "stored token: " + authToken);
 		if (authToken != null) {
-			NetworkUtilities nu = new NetworkUtilities(authToken);
+			NetworkUtilities nu = new NetworkUtilities(authToken, mContext);
 			if (nu.checkAccessToken()) {
 				Log.v(TAG, "getAuthToken() GOOD");
 				final Bundle result = new Bundle();
