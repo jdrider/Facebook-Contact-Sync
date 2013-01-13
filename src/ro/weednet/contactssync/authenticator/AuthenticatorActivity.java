@@ -22,6 +22,8 @@
  */
 package ro.weednet.contactssync.authenticator;
 
+import java.util.Arrays;
+
 import ro.weednet.ContactsSync;
 import ro.weednet.contactssync.Constants;
 import ro.weednet.contactssync.R;
@@ -119,7 +121,13 @@ public class AuthenticatorActivity extends AccountAuthenticatorActivity {
 		activeSession.addCallback(mStatusCallback);
 
 		if (!activeSession.isOpened() && !activeSession.isClosed()) {
-			Session.openActiveSession(this, true, mStatusCallback);
+			//Session.openActiveSession(this, true, mStatusCallback);
+			
+			Session.OpenRequest or = new Session.OpenRequest(this);
+			
+			or.setPermissions(Arrays.asList(Authenticator.REQUIRED_PERMISSIONS));
+			
+			activeSession.openForRead(or);
 		}
 	}
 
@@ -166,11 +174,11 @@ public class AuthenticatorActivity extends AccountAuthenticatorActivity {
 			try {
 				// JSONObject json = response.getGraphObject()
 				// .getInnerJSONObject();
-
+				
 				ContactsSync app = ContactsSync.getInstance();
 				app.setConnectionTimeout(Preferences.DEFAULT_CONNECTION_TIMEOUT);
 				app.savePreferences();
-				final String email = user.getUsername(); // json.getString("username");
+				final String email = (String) user.getProperty("email");
 				final String access_token = Session.getActiveSession()
 						.getAccessToken(); // mFacebook.getAccessToken();
 				final int sync_freq = app.getSyncFrequency() * 3600;
