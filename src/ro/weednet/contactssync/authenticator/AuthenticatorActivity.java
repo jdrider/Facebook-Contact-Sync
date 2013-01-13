@@ -120,9 +120,7 @@ public class AuthenticatorActivity extends AccountAuthenticatorActivity {
 
 		activeSession.addCallback(mStatusCallback);
 
-		if (!activeSession.isOpened() && !activeSession.isClosed()) {
-			//Session.openActiveSession(this, true, mStatusCallback);
-			
+		if (!activeSession.isOpened() && !activeSession.isClosed()) {			
 			Session.OpenRequest or = new Session.OpenRequest(this);
 			
 			or.setPermissions(Arrays.asList(Authenticator.REQUIRED_PERMISSIONS));
@@ -171,16 +169,12 @@ public class AuthenticatorActivity extends AccountAuthenticatorActivity {
 
 		@Override
 		public void onCompleted(GraphUser user, Response response) {
-			try {
-				// JSONObject json = response.getGraphObject()
-				// .getInnerJSONObject();
-				
+			try {				
 				ContactsSync app = ContactsSync.getInstance();
 				app.setConnectionTimeout(Preferences.DEFAULT_CONNECTION_TIMEOUT);
 				app.savePreferences();
 				final String email = (String) user.getProperty("email");
-				final String access_token = Session.getActiveSession()
-						.getAccessToken(); // mFacebook.getAccessToken();
+				final String access_token = Session.getActiveSession().getAccessToken();
 				final int sync_freq = app.getSyncFrequency() * 3600;
 
 				final Account account = new Account(email,
@@ -224,9 +218,7 @@ public class AuthenticatorActivity extends AccountAuthenticatorActivity {
 						finish();
 					}
 				});
-			} // catch (JSONException e) {
-				// Log.w("Facebook", "JSON Error in response");
-			// }
+			}
 			catch (FacebookException e) {
 				Log.w("Facebook", "Facebook Error: " + e.getMessage());
 			}
@@ -273,9 +265,6 @@ public class AuthenticatorActivity extends AccountAuthenticatorActivity {
 				Session.openActiveSession(AuthenticatorActivity.this, true,
 						mStatusCallback);
 				break;
-			case CREATED_TOKEN_LOADED:
-				Log.v("facebook", "SessionState CREATED_TOKEN_LOADED");
-				break;
 			case OPENED:
 				Log.v("facebook", "SessionState OPENED");
 				mHandler.post(new Runnable() {
@@ -295,7 +284,6 @@ public class AuthenticatorActivity extends AccountAuthenticatorActivity {
 				break;
 			default:
 				Log.v("facebook", state.toString());
-				// AuthenticatorActivity.this.finish();
 			}
 
 		}
